@@ -1,0 +1,423 @@
+---
+title: "project"
+author: "EunYoung Park"
+date: "5/3/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(tidyr)
+library(wordcloud)
+library(RColorBrewer)
+library(tm)
+library(wordcloud2)
+library(tidytext)
+library(stringr) 
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+##Getting data and import dataset## 
+```{r}
+#I downloaded the dataset from the Kaggle.com and importd it. After that I chekced the columns name because I looked into the columns that I am interested in. 
+```
+
+```{r }
+data = read.csv(file="/Users/eunyoungpark/Downloads/data_analyst_jobs.csv", header=TRUE)
+colnames(data)
+```
+
+##Clean the data ##
+##Split Location into new variable name "City" and "State"##
+```{r}
+# I checked the column name "Location" consisted of city and state together. Thus, I would like to split into column name "City" and "State". 
+```
+
+```{r}
+head(data$Location)
+
+newdata = data %>%
+  separate(Location, c("City","State"), sep = ',(?=[^,]+$)')
+head(newdata)
+colnames(newdata)
+```
+
+#Split Salary into lower bound salary, upper bound salary and average bound
+```{r}
+#I also checked the column name "Salary" and it includes the chraters and the salary range is interval so I would like to split into the lower bound of salary, upper bound of salary and average bound of salary. I created new columns  :lower bound salary , upperbound salary, average bound 
+```
+
+```{r}
+lower_bound_salary = str_extract(newdata$Salary.Estimate, pattern = "[:digit:]{2,3}")
+lower_bound_salary = as.numeric(lower_bound_salary)*1000
+newdata = cbind(newdata,lower_bound_salary)
+
+upper_bound_salary = str_extract(newdata$Salary.Estimate,pattern = "([:digit:]{2,3})(?=K \\(G)")
+upper_bound_salary = as.numeric(upper_bound_salary)*1000
+newdata = cbind(newdata,upper_bound_salary)
+
+average_bound = (lower_bound_salary + upper_bound_salary) / 2
+newdata = cbind(newdata,average_bound)
+
+head(newdata)
+```
+
+```{r}
+#I’m interested in information for the data analyst job positions and which states and cities have more job openings. I analyzed general information of dataset and visualized. 
+#Here is my plan. The overview of analyzed,  Job listing _per state, Sector_field in data jobs, summary of JobTitle, salaries in Data Analyst, Word in Job Discription, Size of companies, Company_name in Data Analyst , see the relationship between Cities and Data Analyst, and salaries. Easy apply, Easy apply with rating, Easy apply in Data Analyst, city and state.
+```
+
+##Get the number of job lists per State##
+```{r}
+State_list <-newdata %>% group_by(State) %>% summarize(number_of_job_listings = n()) %>%
+  arrange(-number_of_job_listings)
+State_list
+```
+
+##Visualize with barplot 
+```{r}
+# To easy understand, I visualized with barplot.The 1st rank state is "CA", 2nd rank state is "TX" and 3rd rank state is "NY". 
+```
+
+```{r}
+State_list %>% 
+  ggplot(aes(x = reorder(State, number_of_job_listings), y = number_of_job_listings, 
+             fill = State, label = number_of_job_listings))+
+  geom_bar(stat = "identity")+
+  ggtitle("Location Distribution")+
+  xlab("Location")+
+  ylab("Count")+
+  coord_flip()+
+  geom_text(size = 4, 
+            position = position_stack(vjust = 0.5))+
+  theme_bw()+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+##"CA","TX","NY" cities ##
+```{r}
+# Now, I looked into the city specifically in state "CA", "TX", "NY". For "CA" state, the city - San Francisco, Los Angeles and San Diego are the most popular cities in data analyst job positions. For "TX", the city - Austin, Houston, Dallas. For "NY", the city - New York, Brooklyn and Lake Success are the popular cities. 
+#It makes sense that the big cities per state have more job openeings than small cities. 
+```
+
+```{r}
+ #CA
+newdata %>% group_by(State,City) %>% filter(State == " CA") %>% select(City,State,Job.Title) %>%
+  summarise(city_job_listings =n()) %>% arrange(-city_job_listings)
+
+#TX
+newdata %>% group_by(State,City) %>% filter(State == " TX") %>% select(City,State,Job.Title) %>%
+  summarise(tx_job_listings = n()) %>% arrange(-tx_job_listings)
+
+#NY
+newdata %>% group_by(State,City) %>% filter(State == " NY") %>% select(City,State,Job.Title) %>%
+  summarise(ny_job_listings = n()) %>% arrange(-ny_job_listings)
+```
+
+##Sector fields ##
+```{r}
+#I defined the "-1" to "NA " in Sector field to easy analyze. 
+```
+
+```{r}
+newdata$Sector[newdata$Sector==-1] <- "NA"
+```
+
+```{r}
+#Now, I am going to check the sector field in the data anlyst jobs. I think it would be helpful to know sector field for preparing job interviews and getting information. 
+
+#The most of Data Analyst jobs are in the Information Technology and Business Services.
+```
+
+```{r}
+Sector_list <- newdata %>% group_by(Sector) %>% summarize(listing_sum = n()) %>%
+  arrange(-listing_sum) %>% top_n(10)
+Sector_list
+```
+
+##Top 10 Sector Piechart ##
+```{r}
+# I visualized the top 10 sectors with piechart and I think piechart can show the proprtions easily.
+```
+
+```{r}
+Sector_piechart <- Sector_list %>%
+  mutate(prop = listing_sum/ sum(Sector_list$listing_sum) *100) %>%
+  mutate(ypos = cumsum(prop) - 0.5*prop)
+ggplot(Sector_piechart, aes(x="", y = prop, fill = Sector))+
+  geom_bar(stat = "identity", color = "white") + coord_polar("y", start = 0) + theme_void()
+
+```
+
+##Job Title List ##
+```{r}
+#Now, I anlyzed the job title list in the dataset and  got top 10 in job title list. I am curious of which job title is popular in the Data Anlyst Jobs .  
+```
+
+```{r}
+
+Job_title_list <- newdata %>% group_by(Job.Title) %>% summarize(Number_of_job_title = n()) %>%
+  arrange(-Number_of_job_title)
+Job_title_list
+Top_10_Job_Title <- Job_title_list %>% top_n(10)
+Top_10_Job_Title
+```
+
+##Top 10 of Job Title plot##
+```{r}
+# I can checked the "Data Analyst" job title is the top rank and the next is the "Senior Data Anlyst". I guess the general title "Data Anlayst" is the popular and the specific field Data Analyst job position is limited in the job market. 
+```
+
+```{r}
+Top_10_Job_Title %>% 
+  ggplot(aes(x = Job.Title, y =  Number_of_job_title), 
+             fill = Number_of_job_title,label = Number_of_job_title)+
+  geom_bar(stat = "identity")+
+  ggtitle("Popular Job Opening")+
+  xlab("Job_Title")+
+  ylab("Count")+
+  coord_flip()+geom_text(aes(label = Number_of_job_title), vjust = -0.2, colour = "red")
+  theme(legend.position="none")
+```
+
+##Get data with Job Title = Data Analyst and lower_bound_salary, upper_bound_salary, average_bound##
+
+```{r}
+# For the detail, I’m focused in job title name “Data Analyst”. Therefore, here's the job title = Data Analyst in lower_bound salary, upper_bound salary and average bound salary. 
+```
+
+```{r, echo = TRUE}
+Salary <- newdata %>%
+  filter(Job.Title == "Data Analyst") %>% select(Job.Title, lower_bound_salary,upper_bound_salary,average_bound) 
+head(Salary)
+```
+
+##Histogram of salary + Data Analyst ##
+
+```{r}
+#I filter by Data Analyst and getting lower bound upper bound and average bound salary histogram. The average salary estimated in data analyst is dense in between $40000 and $80000.  It’s pretty not bad range. 
+```
+
+```{r}
+
+lower_bound <- newdata %>%
+  filter(Job.Title == "Data Analyst") %>% 
+  select(Job.Title, lower_bound_salary) 
+ggplot(lower_bound,aes(x=lower_bound_salary)) + geom_histogram(color = "darkblue", fill = "lightblue") + ggtitle("Minimum Salary Data Analyst Distribution")+ scale_x_continuous(breaks = seq(2000, 11000, 1000))
+
+average_bound <- newdata %>%
+  filter(Job.Title == "Data Analyst") %>%
+  select(Job.Title, average_bound) %>%
+  ggplot(aes(x = average_bound)) + geom_histogram(color = "darkblue", fill = "lightblue") + ggtitle("Average Salary Data Analyst Distribution")
+average_bound 
+
+upper_bound <- newdata %>%
+  filter(Job.Title == "Data Analyst") %>%
+  select(Job.Title, upper_bound_salary) %>%
+  ggplot(aes(x=upper_bound_salary)) + geom_histogram(color = "darkblue", fill = "lightblue") + ggtitle("Maximum Salary Data Analyst Distribution")
+upper_bound
+
+```
+
+##Get Wordcloud##
+
+```{r}
+# I think the getting wordcloud is pretty cool way to show the frequency words in the text and it visualized the words, so I can check easy what words are high related to the jobs. I am analyzed in the words in job description and used tm_map . 
+#You can see the black, pink, purple, orange, green color. The color stands for the frequency. So, in job description, except Data, the experience can be important words and it can guess that experience is worthy in data analyst job market.   
+
+```
+
+```{r}
+text <- newdata$Job.Description
+docs <- Corpus(VectorSource(text))
+
+docs <- docs %>%
+  tm_map(removeNumbers) %>%
+  tm_map(removePunctuation) %>%
+  tm_map(stripWhitespace)
+docs <- tm_map(docs, content_transformer(tolower))
+docs <- tm_map(docs, removeWords, stopwords("english"))
+
+dtm <- TermDocumentMatrix(docs)
+matrix <- as.matrix(dtm)
+words <- sort(rowSums(matrix), decreasing = TRUE)
+df <- data.frame(word = names(words), freq = words)
+set.seed(1234)
+wordcloud(words = df$word, freq = df$freq, min.freq = 1,
+          max.words = 200, random.order = FALSE, rot.per = 0.35,
+          colors = brewer.pal(8, "Dark2"))
+
+```
+
+##Size of company##
+
+```{r}
+# For general information of the data anlayst job dataset, I analyzed the size of company.  I defined -1 to unknown. Column name [Size] also includes characters together so I extracted only lower bound size and it makes me easy to use. The lower_bound_size column was character so I changed to numeric. 
+
+```
+
+```{r}
+newdata$Size[newdata$Size==-1] <- "Unknown"
+Size_list <-newdata %>% group_by(Size) %>% summarize(Number_of_company= n())
+lower_bound_size = str_extract(Size_list$Size, pattern = "[:digit:]{1,5}")
+lower_bound_size <- as.numeric(lower_bound_size)
+Size_list <- cbind(Size_list, lower_bound_size)
+Size_list <- Size_list[order(Size_list$lower_bound_size), ]
+Size_list
+```
+
+##Size plot##
+```{r}
+#The barplot is great to check the number of each size of companies. Company size is  so variety and distributed in job market. 
+```
+
+```{r}
+
+Size_list %>% 
+  ggplot(aes(x = Number_of_company, y =  reorder(Size, lower_bound_size), 
+             fill = Size, label = Number_of_company))+
+  geom_bar(stat = "identity")+
+  ggtitle("Company Size")+
+  xlab("Number of Company")+
+  ylab("Size")+
+  
+  geom_text(size = 4, 
+            position = position_stack(vjust = 0.5))+
+  theme_bw()+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+##Company list in Job.title = Data Analyst##
+
+```{r}
+#I tried to get the company list in job title "Data Analyst" and I got top 5 company list and It’ll be helpful to find company information easily for applying "Data Analyst" positions. 
+
+```
+
+```{r}
+
+Company_list <- newdata  %>% filter(Job.Title == "Data Analyst") %>% group_by(Company.Name) %>% summarize(Number_of_posting = n()) %>%
+  arrange(-Number_of_posting)
+Company_list
+```
+
+##Getting top 5 of Company_list ##
+```{r}
+Top_10_company <- Company_list %>% top_n(5)
+Top_10_company
+```
+
+
+## Data Analyst + City ##
+```{r}
+#I’m looking for the data analyst in the top_10 cities. Top three rank city is NY, Chicago, SF it is different from the job posting location distribution. Top rank in job posting location is CA , TX, NY but for the data analyst job is New York and Chicago and San Francisco.
+
+```
+
+```{r}
+
+Data_Analyst_job <- newdata %>% filter(Job.Title == "Data Analyst") %>% group_by(City,Job.Title) %>% select(City,Job.Title)
+Data_Analyst_job
+top_10_data_analyst_city <- Data_Analyst_job %>% group_by(City) %>% summarize(number_of_job = n()) %>% arrange(-number_of_job) %>% top_n(10)
+top_10_data_analyst_city
+```
+
+##Pie chart top 10 data analyst in city ##
+```{r}
+#Here is pie chart top 10 cities for "Data Analyst"
+```
+
+```{r}
+ggplot(top_10_data_analyst_city, aes(x = "", y = number_of_job, fill = City)) +
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0) + theme_void()
+```
+
+##Bar charts data analyst in top 3 cities and average salary##
+```{r}
+#For specific, I’m looking into top three cities and average salaries.The San Francisco is more than $ 80000. I guess because of living costs. 
+```
+
+```{r}
+newdata %>%
+  filter(Job.Title == "Data Analyst", City == "New York") %>% 
+  select(Job.Title, average_bound, City) %>% group_by(average_bound) %>% summarise(ny_average_bound = n()) %>% ggplot(aes(x = average_bound, y = ny_average_bound),fill = ny_average_bound) + geom_bar(stat = "identity") + xlab("average salary")+ ylab("count") +ggtitle("Data Analyst Average Salary in New York City")
+
+newdata %>%
+  filter(Job.Title == "Data Analyst", City == "Chicago") %>% 
+  select(Job.Title, average_bound, City) %>% group_by(average_bound) %>% summarise(chicago_average_bound = n()) %>% ggplot(aes(x = average_bound, y = chicago_average_bound),fill = chicago_average_bound) + geom_bar(stat = "identity") +xlab("average salary")+ ylab("count") + ggtitle("Data Analyst Average Salary in Chicago")
+
+newdata %>%
+  filter(Job.Title == "Data Analyst", City == "San Francisco") %>% 
+  select(Job.Title, average_bound, City) %>% group_by(average_bound) %>% summarise(SF_average_bound = n()) %>% ggplot(aes(x = average_bound, y = SF_average_bound),fill = SF_average_bound) + geom_bar(stat = "identity") + ylab("count") + ggtitle("Data Analyst Average Salary in San Francisco")
+
+```
+
+##Easy Apply##
+```{r}
+#Easy apply and easy apply means that applying application through Glassdoor.com with just clicking.
+```
+
+```{r}
+Apply <- newdata %>% filter(Easy.Apply == "True") %>% select(Industry,Rating,City,Easy.Apply,Company.Name)
+head(Apply)
+```
+
+##Top 10 Easy Apply company and Rating##
+```{r}
+#I got the plot top 10 companies easy apply and also adds ratings for those companies. Few companies with high ratings accept with easy applying. 
+
+```
+
+```{r}
+Easy_apply_top_10 <- Apply %>% 
+  group_by(Company.Name,Rating) %>% 
+  summarize(number_of_company = n()) %>% 
+  arrange(-number_of_company) %>% filter(number_of_company >= 2)
+Easy_apply_top_10
+```
+
+##Plot with rating and number of company##
+```{r}
+Easy_apply_top_10 %>% ggplot(aes(x = Company.Name, y =  number_of_company),
+                                 fill = number_of_company, label = number_of_company) + 
+  geom_bar(stat = "identity") +   geom_text(aes(label = number_of_company), vjust = -0.2, colour = "black")+ geom_line(aes(x = Company.Name, y = Rating), color = "red", group = 1)+
+  geom_text(aes(label = Rating), vjust = 3, colour = "red") + geom_point(aes(x = Company.Name, y = Rating), color = "blue") +ggtitle("Company Name and Count for Easy Apply in Top 4")+
+  xlab("Company Name") + ylab ("Count")
+```
+
+##Easy apply in Data Analyst job position per city and State ##
+```{r}
+#For specific, I got the easy apply in data analyst job positions per city and State. There are 2 positions Chicago and New York.
+
+```
+
+```{r}
+
+Analyst <- newdata %>%
+  filter(Easy.Apply =="True", Job.Title=="Data Analyst") %>% select(Easy.Apply,Job.Title,City,State) 
+Analyst
+
+Analyst_1 <- newdata %>%
+  filter(Easy.Apply =="True", Job.Title=="Data Analyst") %>% select(Easy.Apply,Job.Title,City,State,State) %>%
+  group_by(City,State) %>% summarize(count = n()) %>% arrange(-count)
+Analyst_1
+```
+
+##Conclusion##
+
+```{r}
+#In conclusion, job title “Data Analyst” have highest job openings and New York and Chicago and San Francisco is good cities to looking for the Data Analyst jobs because of many opportunities. Thus, there will be high chance to make more money in San Francisco as Data Analyst compared to the New York and Chicago. Also, most of them are from Information Technology and Business Services, so getting information in those sectors also helps to get a job. 
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
